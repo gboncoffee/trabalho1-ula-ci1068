@@ -1,0 +1,145 @@
+\documentclass[twocolumn]{article}
+\usepackage[portuguese]{babel}
+\usepackage{indentfirst}
+\usepackage{svg}
+\usepackage{cuted}
+\usepackage{caption}
+
+\author{Gabriel G. de Brito\\ Departamento de Informática - Universidade Federal do Paraná}
+\title{Implementação Simulada de uma Unidade Lógica Aritmética}
+
+\begin{document}
+
+\maketitle
+
+\section{Introdução}
+
+Neste trabalho documento o processo da criação e o funcionamento de uma Unidade
+Lógica Aritmética (ULA) simulada utilizando o simulador de circuitos
+Digital\footnote{https://github.com/hneemann/Digital}.
+
+Como foi requisitado, a ULA possui duas entradas de 16 bits para operandos e uma
+entrada de 3 bits para a operação. Há também uma saída de 16 bits para o
+resultado e uma saída de 1 bit que identifica se o resultado é 0. As operações
+são, em ordem, adição, subtração, AND, OR, NOT, GT (maior que), LT (menor que) e
+EQ (igual a). Todas as operações (com exceção da NOT, que trabalha somente com a
+entrada ``A'') trabalham com ambos os operandos. Além disso, todas as operações
+são feitas em complemento de 2.
+
+\section{Circuito Principal}
+
+O circuito principal liga as entradas em todas as operações simultaneamente. A
+entrada da função é ligada em multiplexadores que selecionam o resultado da
+operação desejada. É importante notar que ambas as operações de soma e subtração
+dividem o mesmo somador. A função seleciona então se a segunda entrada do
+somador é o complemento lógico do segundo operando ou não e, da mesma maneira,
+seleciona se a entrada de carry é 1 ou 0. Dessa maneira, o somador pode ser
+usado para as duas operações, transformando a operação de subtração em uma soma
+com o complemento de 2 da entrada ``B''.
+
+Não obstante, também deve-se notar o detalhe das operações de comparação. Como
+seus resultados são de apenas 1 bit, porém a entrada do multiplexador e a saída
+do resultado são de 16 bits, deve-se usar um extensor de sinal para que o
+resultado seja propriamente propagado. Dessa maneira, o resultado é ``todos os
+bits setados'' ou ``todos os bits zerados'' para ``verdadeiro'' e ``falso'',
+respectivamente.
+
+A saída ``zero'' é ligada à saída EQ de um comparador cujos operandos são a
+saída da operação e uma constante 0. Dessa maneira, ela é 1 quando o resultado
+da operação for 0 e 0 caso contrário.
+
+\begin{figure}[h]
+    \centering
+    \includesvg[width=\columnwidth]{ula}
+    \caption{Circuito principal da ULA}
+\end{figure}
+
+\section{Somador}
+
+Um somador completo de 1 bit é um circuito simples, que recebe três entradas
+(dois operandos e um sinal de carry) e possui duas saídas (o resultado e o sinal
+de carry). É possível implementar um somador maior apenas ligando o carry de
+saída de um somador ao carry de entrada do próximo. Dessa maneira, o somador de
+16 bits é implementado utilizando-se de 16 somadores de 1 bit. Não é necessário
+se preocupar com números negativos, pois a representação em complemento de 2
+mantém as propriedades aritméticas de números positivos e negativos.
+
+A saída de carry do último somador é utilizada como saída de carry do circuito.
+Nesse trabalho, não há tratamento de overflow, porém é possível implementá-lo
+verificando essa saída e o sinal dos números. Esse circuito também é utilizado
+para a subtração, bastando inverter o segundo operando e a entrada de carry. Por
+ser um trabalho simples e fora do escopo do somador em si, isso é implementado
+diretamente no circuito principal.
+
+\begin{figure}[h]
+    \includesvg[width=\columnwidth]{somador}
+    \caption{Somador de 1 bit}
+\end{figure}
+
+\begin{strip}
+    \centering \includesvg[width=\textwidth]{somador-16bit}
+    \captionof{figure}{Somador de 16 bits}
+\end{strip}
+
+\section{Comparador}
+
+O comparador é um circuito que recebe dois operandos e possui três saídas: GT,
+LT e EQ. É, com certeza, o circuito mais complexo da ULA. Para um único bit, a
+saída EQ vem de um simples XNOR. Para as outras duas saídas, usa-se um AND com
+uma das entradas negadas. Nessa forma, não é possível ligar vários comparadores
+para criar um maior de maneira simples. Utilizando de dois comparadores de 1
+bit, podemos criar um comparador de 2 bits ligando as saídas EQ dos dois em uma
+porta AND, e comparando todas as combinações possíveis para criar as outras duas
+saídas.
+
+Para o comparador de 16 bits, porém, precisamos de um circuito que possa ser
+ligado em cascata. Para isso, criamos um comparador especial de 2 bits
+utilizando o circuito que já foi criado. Ele possui 3 entradas que representam o
+resultado da operação de comparação anterior, e usa a mesma lógica que o
+comparador de 2 bits normal.
+
+\begin{strip}
+    \centering \includesvg[width=\textwidth]{comparador-16bit}
+    \captionof{figure}{Comparador de 16 bits}
+\end{strip}
+
+\begin{figure}
+    \includesvg[width=\columnwidth]{comparador-1bit}
+    \caption{Comparador de 1 bit}
+\end{figure}
+
+\begin{figure}
+    \includesvg[width=\columnwidth]{comparador-2bit}
+    \caption{Comparador de 2 bits}
+\end{figure}
+
+\begin{figure}
+    \includesvg[width=\columnwidth]{comparador-2bit-cascata}
+    \caption{Comparador de 2 bits que permite a ligação em cascata}
+\end{figure}
+
+Como os números estão em complemento de 2, precisamos fazer o tratamento do
+sinal na comparação. Para isso, separamos o bit mais significativo de cada
+número e fazemos uma comparação inversa (isso pois, caso os bits sejam
+diferentes, e A for 1, significa, por exemplo, que A é menor que B, pois A é
+negativo e B positivo). Dessa maneira, sobram 15 bits para comparar. Separamos o
+segundo bit mais significativo de cada operando e comparamos utilizando um
+comparador de 1 bit. Esse comparador servirá como ``bootstrap'', pois seu
+resultado será ligado a um comparador de 2 bits que pode ser cascadeado. Os 14
+bits restantes são separados em grupos de dois, e comparados normalmente.
+
+Ainda que seja viável implementar o comparador de 16 bits utilizando
+comparadores de 4 bits, foi optado por utilizar comparadores de 2 bits pois após
+comparar o sinal e o segundo bit, sobram 14 bits para comparar, que podem ser
+mais facilmente divididos em grupos de 2. Separar em grupos de 4 ainda exigiria
+um circuito para comparar somente dois bits, aumentando a quantidade de módulos
+do sistema.
+
+\section{Considerações Finais}
+
+O trabalho foi concluído com sucesso, e todos os requisitos foram atendidos.
+Testes demonstram que o circuito funciona corretamente. É possível implementar
+tal circuito de maneira mais barata, porém para o escopo do trabalho acredito
+que a solução apresentada é a mais simples.
+
+\end{document}
